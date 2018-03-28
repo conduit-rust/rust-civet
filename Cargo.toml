@@ -1,11 +1,10 @@
-[project]
-
+[package]
 name = "civet"
 version = "0.11.0"
 authors = ["wycats"]
 license = "MIT"
 description = "civetweb-based server implementation for conduit"
-repository = "https://github.com/wycats/rust-civet"
+repository = "https://github.com/jtgeibel/rust-civet"
 
 [dependencies]
 conduit = "0.8"
