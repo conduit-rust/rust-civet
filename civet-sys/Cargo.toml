@@ -8,7 +8,7 @@ build = "build.rs"
 license = "MIT"
 repository = "https://github.com/jtgeibel/rust-civet"
 description = "Native bindings to the libcivetweb library"
+include = ["/civetweb/src/civetweb.c", "/civetweb/src/*.inl", "/civetweb/include/civetweb.h", "/src/*", "build.rs", "Cargo.toml"]
 
 [lib]
 name = "civet_sys"
-path = "lib.rs"
