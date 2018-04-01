@@ -175,7 +175,7 @@ impl<'a> Read for CivetRequest<'a> {
 impl<'a> Drop for Connection<'a> {
     fn drop(&mut self) {
         if !self.written {
-            let _ = writeln!(self, "HTTP/1.1 500 Internal Server Error");
+            let _ = write!(self, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
         }
     }
 }
@@ -239,7 +239,7 @@ impl Server {
             let mut writer = BufWriter::new(connection);
 
             fn err<W: Write>(writer: &mut W) {
-                let _ = writeln!(writer, "HTTP/1.1 500 Internal Server Error");
+                let _ = write!(writer, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
             }
 
             let conduit::Response { status, headers, mut body } = match response {
