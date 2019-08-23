@@ -6,6 +6,9 @@ license = "MIT"
 description = "civetweb-based server implementation for conduit"
 repository = "https://github.com/jtgeibel/rust-civet"
 
+[badges]
+travis-ci = { repository = "https://github.com/jtgeibel/rust-civet" }
+
 [dependencies]
 conduit = "0.8"
 semver = "0.5.0"
