@@ -11,10 +11,10 @@ use conduit::{Request, Response};
 
 macro_rules! http_write {
     ($dst:expr, $fmt:expr) => (
-        try!(write!(&mut $dst, concat!($fmt, "\r\n")))
+        write!(&mut $dst, concat!($fmt, "\r\n"))?
     );
     ($dst:expr, $fmt:expr, $($arg:tt)*) => (
-        try!(write!(&mut $dst, concat!($fmt, "\r\n"), $($arg)*))
+        write!(&mut $dst, concat!($fmt, "\r\n"), $($arg)*)?
     )
 }
 
