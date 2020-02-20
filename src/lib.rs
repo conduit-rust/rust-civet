@@ -107,9 +107,9 @@ impl<'a> conduit::Request for CivetRequest<'a> {
         get_header(self.conn, "Content-Length").and_then(|s| s.parse().ok())
     }
 
-    fn headers(&self) -> &conduit::Headers { &self.headers }
+    fn headers(&self) -> &dyn conduit::Headers { &self.headers }
 
-    fn body(&mut self) -> &mut Read { self }
+    fn body(&mut self) -> &mut dyn Read { self }
 
     fn extensions(&self) -> &Extensions { &self.extensions }
 
@@ -225,14 +225,14 @@ impl<'a> Iterator for HeaderIterator<'a> {
     }
 }
 
-pub struct Server(raw::Server<Box<Handler + 'static + Sync>>);
+pub struct Server(raw::Server<Box<dyn Handler + 'static + Sync>>);
 
 impl Server {
     pub fn start<H: Handler + 'static + Sync>(options: Config, handler: H)
         -> io::Result<Server>
     {
         fn internal_handler(conn: &mut raw::Connection,
-                            handler: &Box<Handler + 'static + Sync>)
+                            handler: &Box<dyn Handler + 'static + Sync>)
                             -> Result<(), ()> {
             let mut connection = Connection::new(conn).unwrap();
             let response = handler.call(&mut connection.request);
@@ -289,7 +289,7 @@ mod test {
     use super::{Server, Config, response};
     use conduit::{Request, Response, Handler};
 
-    fn noop(_: &mut Request) -> Result<Response, io::Error> { unreachable!() }
+    fn noop(_: &mut dyn Request) -> Result<Response, io::Error> { unreachable!() }
 
     fn request(addr: SocketAddr, req: &str) -> String {
         let mut s = TcpStream::connect(&addr).unwrap();
@@ -330,7 +330,7 @@ mod test {
         static mut DROPPED: bool = false;
         struct Foo;
         impl Handler for Foo {
-            fn call(&self, _req: &mut Request) -> Result<Response, Box<Error+Send>> {
+            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
                 panic!()
             }
         }
@@ -346,7 +346,7 @@ mod test {
     fn invokes() {
         struct Foo(Mutex<Sender<()>>);
         impl Handler for Foo {
-            fn call(&self, _req: &mut Request) -> Result<Response, Box<Error+Send>> {
+            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
                 let Foo(ref tx) = *self;
                 tx.lock().unwrap().send(()).unwrap();
                 Ok(response(200, HashMap::new(), Cursor::new(vec![])))
@@ -370,7 +370,7 @@ GET / HTTP/1.1\r
     fn header_sent() {
         struct Foo(Mutex<Sender<String>>);
         impl Handler for Foo {
-            fn call(&self, req: &mut Request) -> Result<Response, Box<Error+Send>> {
+            fn call(&self, req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
                 let Foo(ref tx) = *self;
                 tx.lock().unwrap()
                   .send(req.headers().find("Foo").unwrap().join("")).unwrap();
@@ -396,7 +396,7 @@ Foo: bar\r
     fn failing_handler() {
         struct Foo;
         impl Handler for Foo {
-            fn call(&self, _req: &mut Request) -> Result<Response, Box<Error+Send>> {
+            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
                 panic!()
             }
         }
@@ -416,7 +416,7 @@ Foo: bar\r
     fn failing_handler_is_500() {
         struct Foo;
         impl Handler for Foo {
-            fn call(&self, _req: &mut Request) -> Result<Response, Box<Error+Send>> {
+            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
                 panic!()
             }
         }

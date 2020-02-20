@@ -24,7 +24,7 @@ fn main() {
     rx.recv().unwrap();
 }
 
-fn handler(req: &mut Request) -> io::Result<Response> {
+fn handler(req: &mut dyn Request) -> io::Result<Response> {
     let mut res = Cursor::new(Vec::with_capacity(10000));
 
     http_write!(res, "<style>body {{ font-family: sans-serif; }}</style>");
