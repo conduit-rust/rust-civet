@@ -247,23 +247,23 @@ impl Server {
                 Err(_) => return Err(err(&mut writer)),
             };
             let (code, string) = status;
-            try!(write!(&mut writer, "HTTP/1.1 {} {}\r\n", code, string).map_err(|_| ()));
+            write!(&mut writer, "HTTP/1.1 {} {}\r\n", code, string).map_err(|_| ())?;
 
             for (key, value) in headers.iter() {
                 for header in value.iter() {
-                    try!(write!(&mut writer, "{}: {}\r\n", *key, *header).map_err(|_| ()));
+                    write!(&mut writer, "{}: {}\r\n", *key, *header).map_err(|_| ())?;
                 }
             }
 
-            try!(write!(&mut writer, "\r\n").map_err(|_| ()));
-            try!(body.write_body(&mut writer).map_err(|_| ()));
+            write!(&mut writer, "\r\n").map_err(|_| ())?;
+            body.write_body(&mut writer).map_err(|_| ())?;
 
             Ok(())
         }
 
         let handler = Box::new(handler);
         let raw_callback = raw::ServerCallback::new(internal_handler, handler);
-        Ok(Server(try!(raw::Server::start(options, raw_callback))))
+        Ok(Server(raw::Server::start(options, raw_callback)?))
     }
 }
 
