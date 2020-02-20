@@ -286,7 +286,7 @@ mod test {
     use std::io::{self, Cursor};
     use std::net::{SocketAddr, TcpStream, SocketAddrV4, Ipv4Addr};
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::{channel, Sender};
     use super::{Server, Config, response};
     use conduit::{Request, Response, Handler};
@@ -295,14 +295,14 @@ mod test {
 
     fn request(addr: SocketAddr, req: &str) -> String {
         let mut s = TcpStream::connect(&addr).unwrap();
-        s.write_all(req.trim_left().as_bytes()).unwrap();
+        s.write_all(req.trim_start().as_bytes()).unwrap();
         let mut ret = String::new();
         s.read_to_string(&mut ret).unwrap();
         ret
     }
 
     fn port() -> u16 {
-        static CNT: AtomicUsize = ATOMIC_USIZE_INIT;
+        static CNT: AtomicUsize = AtomicUsize::new(0);
         CNT.fetch_add(1, Ordering::SeqCst) as u16 + 13038
     }
 
