@@ -1,6 +1,6 @@
 [package]
 name = "civet"
-version = "0.9.1"
+version = "0.12.0-alpha.1"
 authors = ["wycats"]
 license = "MIT"
 description = "civetweb-based server implementation for conduit"
@@ -10,8 +10,8 @@ repository = "https://github.com/jtgeibel/rust-civet"
 travis-ci = { repository = "https://github.com/jtgeibel/rust-civet" }
 
 [dependencies]
-conduit = "0.8"
-semver = "0.5.0"
+conduit = "0.9.0-alpha.0"
+semver = "0.9"
 libc = "0.2"
 
 [dependencies.civet-sys]
