@@ -1,4 +1,6 @@
-extern crate civet_sys as ffi;
+#![warn(rust_2018_idioms)]
+
+extern crate civet_sys as _;
 extern crate conduit;
 extern crate libc;
 extern crate semver;
@@ -80,7 +82,7 @@ impl<'a> conduit::Request for CivetRequest<'a> {
         }
     }
 
-    fn host(&self) -> Host {
+    fn host(&self) -> Host<'_> {
         Host::Name(get_header(self.conn, "Host").unwrap())
     }
 
@@ -141,7 +143,7 @@ pub fn response<S: ToStatusCode, R: Read + Send + 'static>(
 }
 
 impl<'a> Connection<'a> {
-    fn new(conn: &raw::Connection) -> Result<Connection, String> {
+    fn new(conn: &raw::Connection) -> Result<Connection<'_>, String> {
         match request_info(conn) {
             Ok(info) => {
                 let request = CivetRequest {
