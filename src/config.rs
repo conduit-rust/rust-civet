@@ -1,6 +1,7 @@
 use libc::c_char;
 use std::ffi::CString;
 
+#[derive(Default)]
 pub struct Config {
     port: Option<u16>,
     threads: Option<u32>,

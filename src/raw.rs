@@ -39,10 +39,7 @@ pub struct ServerCallback<T> {
 
 impl<T: Sync> ServerCallback<T> {
     pub fn new(callback: fn(&mut Connection, &T) -> Result<(), ()>, param: T) -> ServerCallback<T> {
-        ServerCallback {
-            callback: callback,
-            param: param,
-        }
+        ServerCallback { callback, param }
     }
 }
 
@@ -273,7 +270,7 @@ pub fn get_header<'a>(conn: &'a Connection, string: &str) -> Option<&'a str> {
     unsafe { to_slice(conn, |conn| mg_get_header(conn.unwrap(), string.as_ptr())) }
 }
 
-pub fn get_request_info<'a>(conn: &'a Connection) -> Option<RequestInfo<'a>> {
+pub fn get_request_info(conn: &Connection) -> Option<RequestInfo<'_>> {
     unsafe {
         let info = mg_get_request_info(conn.unwrap());
         if info.is_null() {

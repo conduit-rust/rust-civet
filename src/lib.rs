@@ -36,8 +36,8 @@ pub struct CivetRequest<'a> {
 
 fn ver(major: u64, minor: u64) -> semver::Version {
     semver::Version {
-        major: major,
-        minor: minor,
+        major,
+        minor,
         patch: 0,
         pre: vec![],
         build: vec![],
@@ -70,7 +70,7 @@ impl<'a> conduit::Request for CivetRequest<'a> {
             "CONNECT" => Method::Connect,
             "OPTIONS" => Method::Options,
             "TRACE" => Method::Trace,
-            other @ _ => panic!("Civet does not support {} requests", other),
+            other => panic!("Civet does not support {} requests", other),
         }
     }
 
@@ -137,7 +137,7 @@ pub fn response<S: ToStatusCode, R: Read + Send + 'static>(
 ) -> conduit::Response {
     conduit::Response {
         status: status.to_status().ok().unwrap().to_code(),
-        headers: headers,
+        headers,
         body: Box::new(body),
     }
 }
@@ -147,14 +147,14 @@ impl<'a> Connection<'a> {
         match request_info(conn) {
             Ok(info) => {
                 let request = CivetRequest {
-                    conn: conn,
+                    conn,
                     request_info: info,
-                    headers: Headers { conn: conn },
+                    headers: Headers { conn },
                     extensions: TypeMap::new(),
                 };
 
                 Ok(Connection {
-                    request: request,
+                    request,
                     written: false,
                 })
             }
@@ -226,7 +226,7 @@ pub struct HeaderIterator<'a> {
 }
 
 impl<'a> HeaderIterator<'a> {
-    fn new<'b>(conn: &'b raw::Connection) -> HeaderIterator<'b> {
+    fn new(conn: &raw::Connection) -> HeaderIterator<'_> {
         HeaderIterator {
             headers: get_headers(conn),
             position: 0,
@@ -277,7 +277,10 @@ impl Server {
                 mut body,
             } = match response {
                 Ok(r) => r,
-                Err(_) => return Err(err(&mut writer)),
+                Err(_) => {
+                    err(&mut writer);
+                    return Err(());
+                }
             };
             let (code, string) = status;
             write!(&mut writer, "HTTP/1.1 {} {}\r\n", code, string).map_err(|_| ())?;
@@ -300,7 +303,7 @@ impl Server {
     }
 }
 
-fn request_info<'a>(connection: &'a raw::Connection) -> Result<RequestInfo<'a>, String> {
+fn request_info(connection: &raw::Connection) -> Result<RequestInfo<'_>, String> {
     match get_request_info(connection) {
         Some(info) => Ok(info),
         None => Err("Couldn't get request info for connection".to_string()),
