@@ -1,5 +1,5 @@
-extern crate conduit;
 extern crate civet;
+extern crate conduit;
 extern crate route_recognizer;
 
 use std::collections::HashMap;
@@ -7,21 +7,21 @@ use std::error::Error;
 use std::io::{self, Cursor};
 use std::sync::mpsc::channel;
 
-use civet::{Config, Server, response};
+use civet::{response, Config, Server};
 use conduit::{Request, Response};
-use route_recognizer::{Router, Params};
+use route_recognizer::{Params, Router};
 
 struct MyServer {
     router: Router<fn(&mut dyn Request, &Params) -> io::Result<Response>>,
 }
 
 impl conduit::Handler for MyServer {
-    fn call(&self, req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
+    fn call(&self, req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
         let hit = match self.router.recognize(req.path()) {
             Ok(m) => m,
             Err(e) => panic!("{}", e),
         };
-        (*hit.handler)(req, &hit.params).map_err(|e| Box::new(e) as Box<dyn Error+Send>)
+        (*hit.handler)(req, &hit.params).map_err(|e| Box::new(e) as Box<dyn Error + Send>)
     }
 }
 

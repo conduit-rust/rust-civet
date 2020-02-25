@@ -52,11 +52,11 @@ pub enum StatusCode {
 impl StatusCode {
     pub fn to_code(&self) -> (u32, &'static str) {
         match *self {
-            Informational(num, string) |
-                Successful(num, string) |
-                Redirection(num, string) |
-                ClientError(num, string) |
-                ServerError(num, string) => (num, string),
+            Informational(num, string)
+            | Successful(num, string)
+            | Redirection(num, string)
+            | ClientError(num, string)
+            | ServerError(num, string) => (num, string),
             Continue => (100, "Continue"),
             SwitchingProtocols => (101, "Switching Protocols"),
             OK => (200, "OK"),
@@ -121,11 +121,11 @@ impl ToStatusCode for (u32, &'static str) {
 impl ToStatusCode for u32 {
     fn to_status(&self) -> Result<StatusCode, ()> {
         match *self {
-            num @ 102 ..= 199 => Ok(Informational(num, "Informational")),
-            num @ 207 ..= 299 => Ok(Successful(num, "Successful")),
-            num @ 306 | num @ 308 ..= 399 => Ok(Redirection(num, "Redirection")),
-            num @ 402 | num @ 418 ..= 499 => Ok(ClientError(num, "Client Error")),
-            num @ 506 ..= 599 => Ok(ServerError(num, "Server Error")),
+            num @ 102..=199 => Ok(Informational(num, "Informational")),
+            num @ 207..=299 => Ok(Successful(num, "Successful")),
+            num @ 306 | num @ 308..=399 => Ok(Redirection(num, "Redirection")),
+            num @ 402 | num @ 418..=499 => Ok(ClientError(num, "Client Error")),
+            num @ 506..=599 => Ok(ServerError(num, "Server Error")),
             100 => Ok(Continue),
             101 => Ok(SwitchingProtocols),
             200 => Ok(OK),
@@ -165,7 +165,7 @@ impl ToStatusCode for u32 {
             503 => Ok(ServiceUnavailable),
             504 => Ok(GatewayTimeout),
             505 => Ok(HttpVersionNotSupported),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }

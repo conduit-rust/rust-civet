@@ -2,11 +2,11 @@ extern crate civet;
 extern crate conduit;
 
 use std::collections::HashMap;
-use std::sync::mpsc::channel;
-use std::io::{self, Cursor};
 use std::io::prelude::*;
+use std::io::{self, Cursor};
+use std::sync::mpsc::channel;
 
-use civet::{Config, Server, response};
+use civet::{response, Config, Server};
 use conduit::{Request, Response};
 
 macro_rules! http_write {
@@ -50,7 +50,7 @@ fn handler(req: &mut dyn Request) -> io::Result<Response> {
     http_write!(res, "</ul>");
 
     let mut headers = HashMap::new();
-    headers.insert("Content-Type".to_string(), vec!("text/html".to_string()));
+    headers.insert("Content-Type".to_string(), vec!["text/html".to_string()]);
 
     let body = Cursor::new(res.into_inner());
 

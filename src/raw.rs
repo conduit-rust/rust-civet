@@ -1,26 +1,30 @@
-use libc::{c_void,c_char,c_int,c_long,size_t};
+use libc::{c_char, c_int, c_long, c_void, size_t};
 use std::ffi::{CStr, CString};
 use std::io;
 use std::marker;
 use std::mem::transmute;
-use std::ptr::{null, null_mut};
 use std::panic;
+use std::ptr::{null, null_mut};
 use std::str;
 
 use Config;
 
-extern {
-    fn mg_start(callbacks: *const MgCallbacks, user_data: *mut c_void,
-                options: *const *mut c_char) -> *mut MgContext;
+extern "C" {
+    fn mg_start(
+        callbacks: *const MgCallbacks,
+        user_data: *mut c_void,
+        options: *const *mut c_char,
+    ) -> *mut MgContext;
     fn mg_stop(context: *mut MgContext);
-    fn mg_set_request_handler(context: *mut MgContext, uri: *const c_char,
-                              handler: MgRequestHandler, data: *mut c_void);
-    fn mg_read(connection: *mut MgConnection, buf: *mut c_void,
-               len: size_t) -> c_int;
-    fn mg_write(connection: *mut MgConnection, data: *const c_void,
-                len: size_t) -> c_int;
-    fn mg_get_header(connection: *mut MgConnection,
-                     name: *const c_char) -> *const c_char;
+    fn mg_set_request_handler(
+        context: *mut MgContext,
+        uri: *const c_char,
+        handler: MgRequestHandler,
+        data: *mut c_void,
+    );
+    fn mg_read(connection: *mut MgConnection, buf: *mut c_void, len: size_t) -> c_int;
+    fn mg_write(connection: *mut MgConnection, data: *const c_void, len: size_t) -> c_int;
+    fn mg_get_header(connection: *mut MgConnection, name: *const c_char) -> *const c_char;
     fn mg_get_request_info(connection: *mut MgConnection) -> *mut MgRequestInfo;
 }
 
@@ -34,33 +38,38 @@ pub struct ServerCallback<T> {
 }
 
 impl<T: Sync> ServerCallback<T> {
-    pub fn new(callback: fn(&mut Connection, &T) -> Result<(), ()>,
-               param: T) -> ServerCallback<T> {
-        ServerCallback { callback: callback, param: param }
+    pub fn new(callback: fn(&mut Connection, &T) -> Result<(), ()>, param: T) -> ServerCallback<T> {
+        ServerCallback {
+            callback: callback,
+            param: param,
+        }
     }
 }
 
 impl<T: 'static + Sync> Server<T> {
     fn as_ptr(&self) -> *mut MgContext {
-        let Server(context, _) = *self; context
+        let Server(context, _) = *self;
+        context
     }
 
-    pub fn start(options: Config,
-                 callback: ServerCallback<T>) -> io::Result<Server<T>> {
+    pub fn start(options: Config, callback: ServerCallback<T>) -> io::Result<Server<T>> {
         let (_a, ptrs) = ::config::config_to_options(&options);
 
         let context = start(ptrs.as_ptr() as *const _);
         // TODO: fill in this error
         if context.is_null() {
-            return Err(io::Error::new(io::ErrorKind::Other, "other error"))
+            return Err(io::Error::new(io::ErrorKind::Other, "other error"));
         }
 
         let uri = CString::new("**").unwrap();
         let mut callback = Box::new(callback);
         unsafe {
-            mg_set_request_handler(context, uri.as_ptr(),
-                                   raw_handler::<T>,
-                                   &mut *callback as *mut _ as *mut c_void);
+            mg_set_request_handler(
+                context,
+                uri.as_ptr(),
+                raw_handler::<T>,
+                &mut *callback as *mut _ as *mut c_void,
+            );
         }
         Ok(Server(context, callback))
     }
@@ -72,8 +81,7 @@ impl<T: 'static + Sync> Drop for Server<T> {
     }
 }
 
-extern fn raw_handler<T: 'static>(conn: *mut MgConnection,
-                                  param: *mut c_void) -> i32 {
+extern "C" fn raw_handler<T: 'static>(conn: *mut MgConnection, param: *mut c_void) -> i32 {
     struct Env(*mut MgConnection, *mut c_void);
     unsafe impl Send for Env {}
 
@@ -98,16 +106,18 @@ pub struct Connection(*mut MgConnection);
 
 impl Connection {
     fn unwrap(&self) -> *mut MgConnection {
-        match *self { Connection(conn) => conn }
+        match *self {
+            Connection(conn) => conn,
+        }
     }
 }
 
-type MgRequestHandler = extern fn(*mut MgConnection, *mut c_void) -> i32;
+type MgRequestHandler = extern "C" fn(*mut MgConnection, *mut c_void) -> i32;
 
 #[repr(C)]
 struct MgHeader {
     name: *const c_char,
-    value: *const c_char
+    value: *const c_char,
 }
 
 pub struct Header<'a> {
@@ -144,7 +154,7 @@ pub struct MgRequestInfo {
     conn_data: *mut c_void,
 
     num_headers: c_int,
-    headers: [MgHeader; 64]
+    headers: [MgHeader; 64],
 }
 
 pub struct RequestInfo<'a> {
@@ -203,7 +213,7 @@ struct MgCallbacks {
     open_file: *const c_void,
     init_lua: *const c_void,
     upload: *const c_void,
-    http_error: *const c_void
+    http_error: *const c_void,
 }
 
 impl MgCallbacks {
@@ -220,13 +230,14 @@ impl MgCallbacks {
             open_file: null(),
             init_lua: null(),
             upload: null(),
-            http_error: null()
+            http_error: null(),
         }
     }
 }
 
 fn to_slice<'a, T, F>(obj: &'a T, mut callback: F) -> Option<&'a str>
-    where F: FnMut(&'a T) -> *const c_char
+where
+    F: FnMut(&'a T) -> *const c_char,
 {
     let chars = callback(obj);
 
@@ -242,7 +253,13 @@ pub fn start(options: *const *mut c_char) -> *mut MgContext {
 }
 
 pub fn read(conn: &Connection, buf: &mut [u8]) -> i32 {
-    unsafe { mg_read(conn.unwrap(), buf.as_mut_ptr() as *mut c_void, buf.len() as size_t) }
+    unsafe {
+        mg_read(
+            conn.unwrap(),
+            buf.as_mut_ptr() as *mut c_void,
+            buf.len() as size_t,
+        )
+    }
 }
 
 pub fn write(conn: &Connection, bytes: &[u8]) -> i32 {
@@ -253,9 +270,7 @@ pub fn write(conn: &Connection, bytes: &[u8]) -> i32 {
 pub fn get_header<'a>(conn: &'a Connection, string: &str) -> Option<&'a str> {
     let string = CString::new(string).unwrap();
 
-    unsafe {
-        to_slice(conn, |conn| mg_get_header(conn.unwrap(), string.as_ptr()))
-    }
+    unsafe { to_slice(conn, |conn| mg_get_header(conn.unwrap(), string.as_ptr())) }
 }
 
 pub fn get_request_info<'a>(conn: &'a Connection) -> Option<RequestInfo<'a>> {
@@ -264,7 +279,10 @@ pub fn get_request_info<'a>(conn: &'a Connection) -> Option<RequestInfo<'a>> {
         if info.is_null() {
             None
         } else {
-            Some(RequestInfo { ptr: info, _marker: marker::PhantomData })
+            Some(RequestInfo {
+                ptr: info,
+                _marker: marker::PhantomData,
+            })
         }
     }
 }
@@ -272,10 +290,15 @@ pub fn get_request_info<'a>(conn: &'a Connection) -> Option<RequestInfo<'a>> {
 pub fn get_headers<'a>(conn: &'a Connection) -> Vec<Header<'a>> {
     match get_request_info(conn) {
         Some(info) => unsafe {
-            (*info.as_ptr()).headers.iter_mut().map(|h| {
-                Header { ptr: h, _marker: marker::PhantomData }
-            }).collect()
+            (*info.as_ptr())
+                .headers
+                .iter_mut()
+                .map(|h| Header {
+                    ptr: h,
+                    _marker: marker::PhantomData,
+                })
+                .collect()
         },
-        None => vec!()
+        None => vec![],
     }
 }

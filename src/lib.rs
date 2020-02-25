@@ -1,23 +1,23 @@
+extern crate civet_sys as ffi;
 extern crate conduit;
 extern crate libc;
 extern crate semver;
-extern crate civet_sys as ffi;
 
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::io::{self, BufWriter};
-use std::net::{SocketAddr, Ipv4Addr, SocketAddrV4};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use conduit::{Handler, Extensions, TypeMap, Method, Scheme, Host};
+use conduit::{Extensions, Handler, Host, Method, Scheme, TypeMap};
 
-use raw::{RequestInfo,Header};
-use raw::{get_header,get_headers,get_request_info};
-use status::{ToStatusCode};
+use raw::{get_header, get_headers, get_request_info};
+use raw::{Header, RequestInfo};
+use status::ToStatusCode;
 
 pub use config::Config;
 
-mod raw;
 mod config;
+mod raw;
 pub mod status;
 
 pub struct Connection<'a> {
@@ -29,7 +29,7 @@ pub struct CivetRequest<'a> {
     conn: &'a raw::Connection,
     request_info: RequestInfo<'a>,
     headers: Headers<'a>,
-    extensions: Extensions
+    extensions: Extensions,
 }
 
 fn ver(major: u64, minor: u64) -> semver::Version {
@@ -37,8 +37,8 @@ fn ver(major: u64, minor: u64) -> semver::Version {
         major: major,
         minor: minor,
         patch: 0,
-        pre: vec!(),
-        build: vec!()
+        pre: vec![],
+        build: vec![],
     }
 }
 
@@ -48,7 +48,7 @@ impl<'a> conduit::Request for CivetRequest<'a> {
         match version {
             "1.0" => ver(1, 0),
             "1.1" => ver(1, 1),
-            _ => ver(1, 1)
+            _ => ver(1, 1),
         }
     }
 
@@ -68,7 +68,7 @@ impl<'a> conduit::Request for CivetRequest<'a> {
             "CONNECT" => Method::Connect,
             "OPTIONS" => Method::Options,
             "TRACE" => Method::Trace,
-            other @ _ => panic!("Civet does not support {} requests", other)
+            other @ _ => panic!("Civet does not support {} requests", other),
         }
     }
 
@@ -98,10 +98,12 @@ impl<'a> conduit::Request for CivetRequest<'a> {
 
     fn remote_addr(&self) -> SocketAddr {
         let ip = self.request_info.remote_ip();
-        let ip = Ipv4Addr::new((ip >> 24) as u8,
-                               (ip >> 16) as u8,
-                               (ip >>  8) as u8,
-                               (ip >>  0) as u8);
+        let ip = Ipv4Addr::new(
+            (ip >> 24) as u8,
+            (ip >> 16) as u8,
+            (ip >> 8) as u8,
+            (ip >> 0) as u8,
+        );
         SocketAddr::V4(SocketAddrV4::new(ip, self.request_info.remote_port()))
     }
 
@@ -109,20 +111,28 @@ impl<'a> conduit::Request for CivetRequest<'a> {
         get_header(self.conn, "Content-Length").and_then(|s| s.parse().ok())
     }
 
-    fn headers(&self) -> &dyn conduit::Headers { &self.headers }
+    fn headers(&self) -> &dyn conduit::Headers {
+        &self.headers
+    }
 
-    fn body(&mut self) -> &mut dyn Read { self }
+    fn body(&mut self) -> &mut dyn Read {
+        self
+    }
 
-    fn extensions(&self) -> &Extensions { &self.extensions }
+    fn extensions(&self) -> &Extensions {
+        &self.extensions
+    }
 
     fn mut_extensions(&mut self) -> &mut Extensions {
         &mut self.extensions
     }
 }
 
-pub fn response<S: ToStatusCode, R: Read + Send + 'static>(status: S,
-    headers: HashMap<String, Vec<String>>, body: R) -> conduit::Response
-{
+pub fn response<S: ToStatusCode, R: Read + Send + 'static>(
+    status: S,
+    headers: HashMap<String, Vec<String>>,
+    body: R,
+) -> conduit::Response {
     conduit::Response {
         status: status.to_status().ok().unwrap().to_code(),
         headers: headers,
@@ -138,38 +148,43 @@ impl<'a> Connection<'a> {
                     conn: conn,
                     request_info: info,
                     headers: Headers { conn: conn },
-                    extensions: TypeMap::new()
+                    extensions: TypeMap::new(),
                 };
 
                 Ok(Connection {
                     request: request,
                     written: false,
                 })
-            },
-            Err(err) => Err(err)
+            }
+            Err(err) => Err(err),
         }
     }
-
 }
 
 impl<'a> Write for Connection<'a> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.written = true;
         match raw::write(self.request.conn, buf) {
-            n if n < 0 => Err(io::Error::new(io::ErrorKind::Other,
-                                             &format!("write error ({})", n)[..])),
-            n => Ok(n as usize)
+            n if n < 0 => Err(io::Error::new(
+                io::ErrorKind::Other,
+                &format!("write error ({})", n)[..],
+            )),
+            n => Ok(n as usize),
         }
     }
-    fn flush(&mut self) -> io::Result<()> { Ok(()) }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 impl<'a> Read for CivetRequest<'a> {
-    fn read(&mut self, buf: &mut[u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match raw::read(self.conn, buf) {
-            n if n < 0 => Err(io::Error::new(io::ErrorKind::Other,
-                                             &format!("read error ({})", n)[..])),
-            n => Ok(n as usize)
+            n if n < 0 => Err(io::Error::new(
+                io::ErrorKind::Other,
+                &format!("read error ({})", n)[..],
+            )),
+            n => Ok(n as usize),
         }
     }
 }
@@ -177,18 +192,21 @@ impl<'a> Read for CivetRequest<'a> {
 impl<'a> Drop for Connection<'a> {
     fn drop(&mut self) {
         if !self.written {
-            let _ = write!(self, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
+            let _ = write!(
+                self,
+                "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n"
+            );
         }
     }
 }
 
 pub struct Headers<'a> {
-    conn: &'a raw::Connection
+    conn: &'a raw::Connection,
 }
 
 impl<'a> conduit::Headers for Headers<'a> {
     fn find(&self, string: &str) -> Option<Vec<&str>> {
-        get_header(self.conn, string).map(|s| vec!(s))
+        get_header(self.conn, string).map(|s| vec![s])
     }
 
     fn has(&self, string: &str) -> bool {
@@ -202,12 +220,15 @@ impl<'a> conduit::Headers for Headers<'a> {
 
 pub struct HeaderIterator<'a> {
     headers: Vec<Header<'a>>,
-    position: usize
+    position: usize,
 }
 
 impl<'a> HeaderIterator<'a> {
     fn new<'b>(conn: &'b raw::Connection) -> HeaderIterator<'b> {
-        HeaderIterator { headers: get_headers(conn), position: 0 }
+        HeaderIterator {
+            headers: get_headers(conn),
+            position: 0,
+        }
     }
 }
 
@@ -222,7 +243,9 @@ impl<'a> Iterator for HeaderIterator<'a> {
         } else {
             let header = &headers[pos];
             self.position += 1;
-            header.name().map(|name| (name, vec!(header.value().unwrap())))
+            header
+                .name()
+                .map(|name| (name, vec![header.value().unwrap()]))
         }
     }
 }
@@ -230,21 +253,27 @@ impl<'a> Iterator for HeaderIterator<'a> {
 pub struct Server(raw::Server<Box<dyn Handler + 'static + Sync>>);
 
 impl Server {
-    pub fn start<H: Handler + 'static + Sync>(options: Config, handler: H)
-        -> io::Result<Server>
-    {
-        fn internal_handler(conn: &mut raw::Connection,
-                            handler: &Box<dyn Handler + 'static + Sync>)
-                            -> Result<(), ()> {
+    pub fn start<H: Handler + 'static + Sync>(options: Config, handler: H) -> io::Result<Server> {
+        fn internal_handler(
+            conn: &mut raw::Connection,
+            handler: &Box<dyn Handler + 'static + Sync>,
+        ) -> Result<(), ()> {
             let mut connection = Connection::new(conn).unwrap();
             let response = handler.call(&mut connection.request);
             let mut writer = BufWriter::new(connection);
 
             fn err<W: Write>(writer: &mut W) {
-                let _ = write!(writer, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
+                let _ = write!(
+                    writer,
+                    "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n"
+                );
             }
 
-            let conduit::Response { status, headers, mut body } = match response {
+            let conduit::Response {
+                status,
+                headers,
+                mut body,
+            } = match response {
                 Ok(r) => r,
                 Err(_) => return Err(err(&mut writer)),
             };
@@ -269,29 +298,29 @@ impl Server {
     }
 }
 
-fn request_info<'a>(connection: &'a raw::Connection)
-    -> Result<RequestInfo<'a>, String>
-{
+fn request_info<'a>(connection: &'a raw::Connection) -> Result<RequestInfo<'a>, String> {
     match get_request_info(connection) {
         Some(info) => Ok(info),
-        None => Err("Couldn't get request info for connection".to_string())
+        None => Err("Couldn't get request info for connection".to_string()),
     }
 }
 
 #[cfg(test)]
 mod test {
+    use super::{response, Config, Server};
+    use conduit::{Handler, Request, Response};
     use std::collections::HashMap;
     use std::error::Error;
     use std::io::prelude::*;
     use std::io::{self, Cursor};
-    use std::net::{SocketAddr, TcpStream, SocketAddrV4, Ipv4Addr};
-    use std::sync::Mutex;
+    use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::{channel, Sender};
-    use super::{Server, Config, response};
-    use conduit::{Request, Response, Handler};
+    use std::sync::Mutex;
 
-    fn noop(_: &mut dyn Request) -> Result<Response, io::Error> { unreachable!() }
+    fn noop(_: &mut dyn Request) -> Result<Response, io::Error> {
+        unreachable!()
+    }
 
     fn request(addr: SocketAddr, req: &str) -> String {
         let mut s = TcpStream::connect(&addr).unwrap();
@@ -309,7 +338,7 @@ mod test {
     fn cfg(port: u16) -> Config {
         let mut cfg = Config::new();
         cfg.port(port).threads(1);
-        return cfg
+        return cfg;
     }
 
     #[test]
@@ -331,23 +360,29 @@ mod test {
         static mut DROPPED: bool = false;
         struct Foo;
         impl Handler for Foo {
-            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
+            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
                 panic!()
             }
         }
         impl Drop for Foo {
-            fn drop(&mut self) { unsafe { DROPPED = true; } }
+            fn drop(&mut self) {
+                unsafe {
+                    DROPPED = true;
+                }
+            }
         }
 
         drop(Server::start(cfg(port()), Foo));
-        unsafe { assert!(DROPPED); }
+        unsafe {
+            assert!(DROPPED);
+        }
     }
 
     #[test]
     fn invokes() {
         struct Foo(Mutex<Sender<()>>);
         impl Handler for Foo {
-            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
+            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
                 let Foo(ref tx) = *self;
                 tx.lock().unwrap().send(()).unwrap();
                 Ok(response(200, HashMap::new(), Cursor::new(vec![])))
@@ -360,10 +395,13 @@ mod test {
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let addr = SocketAddr::V4(SocketAddrV4::new(ip, port));
         let _s = Server::start(cfg(port), handler);
-        request(addr, r"
+        request(
+            addr,
+            r"
 GET / HTTP/1.1
 
-");
+",
+        );
         rx.recv().unwrap();
     }
 
@@ -371,10 +409,12 @@ GET / HTTP/1.1
     fn header_sent() {
         struct Foo(Mutex<Sender<String>>);
         impl Handler for Foo {
-            fn call(&self, req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
+            fn call(&self, req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
                 let Foo(ref tx) = *self;
-                tx.lock().unwrap()
-                  .send(req.headers().find("Foo").unwrap().join("")).unwrap();
+                tx.lock()
+                    .unwrap()
+                    .send(req.headers().find("Foo").unwrap().join(""))
+                    .unwrap();
                 Ok(response(200, HashMap::new(), Cursor::new(vec![])))
             }
         }
@@ -385,11 +425,14 @@ GET / HTTP/1.1
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let addr = SocketAddr::V4(SocketAddrV4::new(ip, port));
         let _s = Server::start(cfg(port), handler);
-        request(addr, r"
+        request(
+            addr,
+            r"
 GET / HTTP/1.1
 Foo: bar
 
-");
+",
+        );
         assert_eq!(rx.recv().unwrap(), "bar");
     }
 
@@ -397,7 +440,7 @@ Foo: bar
     fn failing_handler() {
         struct Foo;
         impl Handler for Foo {
-            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
+            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
                 panic!()
             }
         }
@@ -406,18 +449,21 @@ Foo: bar
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let addr = SocketAddr::V4(SocketAddrV4::new(ip, port));
         let _s = Server::start(cfg(port), Foo);
-        request(addr, r"
+        request(
+            addr,
+            r"
 GET / HTTP/1.1
 Foo: bar
 
-");
+",
+        );
     }
 
     #[test]
     fn failing_handler_is_500() {
         struct Foo;
         impl Handler for Foo {
-            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error+Send>> {
+            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
                 panic!()
             }
         }
@@ -426,12 +472,18 @@ Foo: bar
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let addr = SocketAddr::V4(SocketAddrV4::new(ip, port));
         let _s = Server::start(cfg(port), Foo);
-        let response = request(addr, r"
+        let response = request(
+            addr,
+            r"
 GET / HTTP/1.1
 Foo: bar
 
-");
-        assert!(response.contains("500 Internal"),
-                "not a failing response: {}", response);
+",
+        );
+        assert!(
+            response.contains("500 Internal"),
+            "not a failing response: {}",
+            response
+        );
     }
 }

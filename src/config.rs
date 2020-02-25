@@ -33,16 +33,20 @@ impl Config {
 }
 
 pub fn config_to_options(config: &Config) -> (Vec<CString>, Vec<*const c_char>) {
-    let Config { port, threads, enable_keep_alive } = *config;
+    let Config {
+        port,
+        threads,
+        enable_keep_alive,
+    } = *config;
     let mut options = Vec::new();
     opt(&mut options, "listening_ports", port.map(|i| i.to_string()));
     opt(&mut options, "num_threads", threads.map(|i| i.to_string()));
-    opt(&mut options, "enable_keep_alive", enable_keep_alive.map(|b| {
-        (if b {"yes"} else {"no"}).to_string()
-    }));
-    let mut ptrs: Vec<*const c_char> = options.iter().map(|a| {
-        a.as_ptr()
-    }).collect();
+    opt(
+        &mut options,
+        "enable_keep_alive",
+        enable_keep_alive.map(|b| (if b { "yes" } else { "no" }).to_string()),
+    );
+    let mut ptrs: Vec<*const c_char> = options.iter().map(|a| a.as_ptr()).collect();
     ptrs.push(0 as *const c_char);
     return (options, ptrs);
 
