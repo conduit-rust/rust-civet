@@ -1,13 +1,12 @@
 extern crate civet;
 extern crate conduit;
 
-use std::collections::HashMap;
 use std::io::prelude::*;
 use std::io::{self, Cursor};
 use std::sync::mpsc::channel;
 
-use civet::{response, Config, Server};
-use conduit::{Request, Response};
+use civet::{Config, Server};
+use conduit::{header, vec_to_body, Body, RequestExt, Response};
 
 macro_rules! http_write {
     ($dst:expr, $fmt:expr) => (
@@ -24,11 +23,11 @@ fn main() {
     rx.recv().unwrap();
 }
 
-fn handler(req: &mut dyn Request) -> io::Result<Response> {
+fn handler(req: &mut dyn RequestExt) -> io::Result<Response<Body>> {
     let mut res = Cursor::new(Vec::with_capacity(10000));
 
     http_write!(res, "<style>body {{ font-family: sans-serif; }}</style>");
-    http_write!(res, "<p>HTTP {}</p>", req.http_version());
+    http_write!(res, "<p>HTTP {:?}</p>", req.http_version());
     http_write!(res, "<p>Method: {:?}</p>", req.method());
     http_write!(res, "<p>Scheme: {:?}</p>", req.scheme());
     http_write!(res, "<p>Host: {:?}</p>", req.host());
@@ -43,16 +42,20 @@ fn handler(req: &mut dyn Request) -> io::Result<Response> {
 
     http_write!(res, "<h2>Headers</h2><ul>");
 
-    // for (key, value) in req.headers().iter() {
-    //     http_write!(res, "<li>{} = {}</li>", key, value);
-    // }
+    for (key, value) in req.headers().iter() {
+        http_write!(
+            res,
+            "<li>{} = {}</li>",
+            key,
+            value.to_str().unwrap_or_default()
+        );
+    }
 
     http_write!(res, "</ul>");
 
-    let mut headers = HashMap::new();
-    headers.insert("Content-Type".to_string(), vec!["text/html".to_string()]);
-
-    let body = Cursor::new(res.into_inner());
-
-    Ok(response(200, headers, body))
+    let body: Body = vec_to_body(res.into_inner());
+    Ok(Response::builder()
+        .header(header::CONTENT_TYPE, "text/plain")
+        .body(body)
+        .unwrap())
 }

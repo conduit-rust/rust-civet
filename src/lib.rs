@@ -3,24 +3,20 @@
 extern crate civet_sys as _;
 extern crate conduit;
 extern crate libc;
-extern crate semver;
 
-use std::collections::HashMap;
 use std::io::prelude::*;
 use std::io::{self, BufWriter};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use conduit::{Extensions, Handler, Host, Method, Scheme, TypeMap};
+use conduit::{header, Extensions, Handler, HeaderMap, Host, Method, Scheme, TypeMap, Version};
 
 use raw::{get_header, get_headers, get_request_info};
 use raw::{Header, RequestInfo};
-use status::ToStatusCode;
 
 pub use config::Config;
 
 mod config;
 mod raw;
-pub mod status;
 
 pub struct Connection<'a> {
     request: CivetRequest<'a>,
@@ -30,48 +26,19 @@ pub struct Connection<'a> {
 pub struct CivetRequest<'a> {
     conn: &'a raw::Connection,
     request_info: RequestInfo<'a>,
-    headers: Headers<'a>,
+    headers: HeaderMap,
     extensions: Extensions,
+    version: Version,
+    method: Method,
 }
 
-fn ver(major: u64, minor: u64) -> semver::Version {
-    semver::Version {
-        major,
-        minor,
-        patch: 0,
-        pre: vec![],
-        build: vec![],
-    }
-}
-
-impl<'a> conduit::Request for CivetRequest<'a> {
-    fn http_version(&self) -> semver::Version {
-        let version = self.request_info.http_version().unwrap();
-        match version {
-            "1.0" => ver(1, 0),
-            "1.1" => ver(1, 1),
-            _ => ver(1, 1),
-        }
+impl<'a> conduit::RequestExt for CivetRequest<'a> {
+    fn http_version(&self) -> Version {
+        self.version
     }
 
-    fn conduit_version(&self) -> semver::Version {
-        ver(0, 1)
-    }
-
-    fn method(&self) -> Method {
-        match self.request_info.method().unwrap() {
-            "HEAD" => Method::Head,
-            "GET" => Method::Get,
-            "POST" => Method::Post,
-            "PUT" => Method::Put,
-            "DELETE" => Method::Delete,
-            "PATCH" => Method::Patch,
-            "PURGE" => Method::Purge,
-            "CONNECT" => Method::Connect,
-            "OPTIONS" => Method::Options,
-            "TRACE" => Method::Trace,
-            other => panic!("Civet does not support {} requests", other),
-        }
+    fn method(&self) -> &Method {
+        &self.method
     }
 
     fn scheme(&self) -> Scheme {
@@ -83,7 +50,7 @@ impl<'a> conduit::Request for CivetRequest<'a> {
     }
 
     fn host(&self) -> Host<'_> {
-        Host::Name(get_header(self.conn, "Host").unwrap())
+        Host::Name(get_header(self.conn, header::HOST).unwrap())
     }
 
     fn virtual_root(&self) -> Option<&str> {
@@ -110,10 +77,10 @@ impl<'a> conduit::Request for CivetRequest<'a> {
     }
 
     fn content_length(&self) -> Option<u64> {
-        get_header(self.conn, "Content-Length").and_then(|s| s.parse().ok())
+        get_header(self.conn, header::CONTENT_LENGTH).and_then(|s| s.parse().ok())
     }
 
-    fn headers(&self) -> &dyn conduit::Headers {
+    fn headers(&self) -> &HeaderMap {
         &self.headers
     }
 
@@ -130,27 +97,35 @@ impl<'a> conduit::Request for CivetRequest<'a> {
     }
 }
 
-pub fn response<S: ToStatusCode, R: Read + Send + 'static>(
-    status: S,
-    headers: HashMap<String, Vec<String>>,
-    body: R,
-) -> conduit::Response {
-    conduit::Response {
-        status: status.to_status().ok().unwrap().to_code(),
-        headers,
-        body: Box::new(body),
-    }
-}
-
 impl<'a> Connection<'a> {
     fn new(conn: &raw::Connection) -> Result<Connection<'_>, String> {
         match request_info(conn) {
             Ok(info) => {
+                let mut headers = HeaderMap::new();
+                for (name, value) in HeaderIterator::new(conn) {
+                    headers.insert(
+                        header::HeaderName::from_bytes(name.as_bytes())
+                            .map_err(|e| e.to_string())?,
+                        header::HeaderValue::from_bytes(value.as_bytes())
+                            .map_err(|e| e.to_string())?,
+                    );
+                }
+                let method = Method::from_bytes(info.method().unwrap().as_bytes())
+                    .expect("Bad request method"); // FIXME: unwrap and expect panic
+
+                let version = match info.http_version().unwrap() {
+                    "1.0" => Version::HTTP_10,
+                    "1.1" => Version::HTTP_11,
+                    _ => Version::default(),
+                };
+
                 let request = CivetRequest {
                     conn,
                     request_info: info,
-                    headers: Headers { conn },
+                    headers,
                     extensions: TypeMap::new(),
+                    method,
+                    version,
                 };
 
                 Ok(Connection {
@@ -202,25 +177,7 @@ impl<'a> Drop for Connection<'a> {
     }
 }
 
-pub struct Headers<'a> {
-    conn: &'a raw::Connection,
-}
-
-impl<'a> conduit::Headers for Headers<'a> {
-    fn find(&self, string: &str) -> Option<Vec<&str>> {
-        get_header(self.conn, string).map(|s| vec![s])
-    }
-
-    fn has(&self, string: &str) -> bool {
-        get_header(self.conn, string).is_some()
-    }
-
-    fn all(&self) -> Vec<(&str, Vec<&str>)> {
-        HeaderIterator::new(self.conn).collect()
-    }
-}
-
-pub struct HeaderIterator<'a> {
+struct HeaderIterator<'a> {
     headers: Vec<Header<'a>>,
     position: usize,
 }
@@ -235,8 +192,8 @@ impl<'a> HeaderIterator<'a> {
 }
 
 impl<'a> Iterator for HeaderIterator<'a> {
-    type Item = (&'a str, Vec<&'a str>);
-    fn next(&mut self) -> Option<(&'a str, Vec<&'a str>)> {
+    type Item = (&'a str, &'a str);
+    fn next(&mut self) -> Option<Self::Item> {
         let pos = self.position;
         let headers = &self.headers;
 
@@ -245,9 +202,7 @@ impl<'a> Iterator for HeaderIterator<'a> {
         } else {
             let header = &headers[pos];
             self.position += 1;
-            header
-                .name()
-                .map(|name| (name, vec![header.value().unwrap()]))
+            header.name().map(|name| (name, header.value().unwrap()))
         }
     }
 }
@@ -271,24 +226,27 @@ impl Server {
                 );
             }
 
-            let conduit::Response {
-                status,
-                headers,
-                mut body,
-            } = match response {
+            let (head, mut body) = match response {
                 Ok(r) => r,
                 Err(_) => {
                     err(&mut writer);
                     return Err(());
                 }
-            };
-            let (code, string) = status;
-            write!(&mut writer, "HTTP/1.1 {} {}\r\n", code, string).map_err(|_| ())?;
+            }
+            .into_parts();
 
-            for (key, value) in headers.iter() {
-                for header in value.iter() {
-                    write!(&mut writer, "{}: {}\r\n", *key, *header).map_err(|_| ())?;
-                }
+            write!(
+                &mut writer,
+                "HTTP/1.1 {} {}\r\n",
+                head.status.as_str(),
+                head.status.canonical_reason().unwrap_or("UNKNOWN")
+            )
+            .map_err(|_| ())?;
+
+            for (key, value) in head.headers.iter() {
+                write!(&mut writer, "{}: ", *key).map_err(|_| ())?;
+                writer.write(value.as_bytes()).map_err(|_| ())?;
+                writer.write(b"\r\n").map_err(|_| ())?;
             }
 
             write!(&mut writer, "\r\n").map_err(|_| ())?;
@@ -312,22 +270,21 @@ fn request_info(connection: &raw::Connection) -> Result<RequestInfo<'_>, String>
 
 #[cfg(test)]
 mod test {
-    use super::{response, Config, Server};
-    use conduit::{Handler, Request, Response};
-    use std::collections::HashMap;
-    use std::error::Error;
-    use std::io::prelude::*;
-    use std::io::{self, Cursor};
+    use super::{Config, Server};
+    use conduit::{box_error, Body, Handler, HandlerResult, HttpResult, RequestExt, Response};
+    use std::io;
     use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::{channel, Sender};
     use std::sync::Mutex;
 
-    fn noop(_: &mut dyn Request) -> Result<Response, io::Error> {
+    fn noop(_: &mut dyn RequestExt) -> HttpResult {
         unreachable!()
     }
 
     fn request(addr: SocketAddr, req: &str) -> String {
+        use std::io::{Read, Write};
+
         let mut s = TcpStream::connect(&addr).unwrap();
         s.write_all(req.trim_start().as_bytes()).unwrap();
         let mut ret = String::new();
@@ -365,7 +322,7 @@ mod test {
         static mut DROPPED: bool = false;
         struct Foo;
         impl Handler for Foo {
-            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
+            fn call(&self, _req: &mut dyn RequestExt) -> HandlerResult {
                 panic!()
             }
         }
@@ -387,10 +344,11 @@ mod test {
     fn invokes() {
         struct Foo(Mutex<Sender<()>>);
         impl Handler for Foo {
-            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
+            fn call(&self, _req: &mut dyn RequestExt) -> HandlerResult {
                 let Foo(ref tx) = *self;
                 tx.lock().unwrap().send(()).unwrap();
-                Ok(response(200, HashMap::new(), Cursor::new(vec![])))
+                let body: Body = Box::new(io::empty());
+                Response::builder().body(body).map_err(box_error)
             }
         }
 
@@ -412,15 +370,16 @@ GET / HTTP/1.1
 
     #[test]
     fn header_sent() {
-        struct Foo(Mutex<Sender<String>>);
+        struct Foo(Mutex<Sender<Vec<u8>>>);
         impl Handler for Foo {
-            fn call(&self, req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
+            fn call(&self, req: &mut dyn RequestExt) -> HandlerResult {
                 let Foo(ref tx) = *self;
-                tx.lock()
-                    .unwrap()
-                    .send(req.headers().find("Foo").unwrap().join(""))
-                    .unwrap();
-                Ok(response(200, HashMap::new(), Cursor::new(vec![])))
+                let mut header_val = Vec::new();
+                header_val.extend_from_slice(req.headers().get("Foo").unwrap().as_bytes());
+                tx.lock().unwrap().send(header_val).unwrap();
+                Response::builder()
+                    .body(Box::new(io::empty()) as Body)
+                    .map_err(box_error)
             }
         }
 
@@ -438,14 +397,14 @@ Foo: bar
 
 ",
         );
-        assert_eq!(rx.recv().unwrap(), "bar");
+        assert_eq!(rx.recv().unwrap(), b"bar");
     }
 
     #[test]
     fn failing_handler() {
         struct Foo;
         impl Handler for Foo {
-            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
+            fn call(&self, _req: &mut dyn RequestExt) -> HandlerResult {
                 panic!()
             }
         }
@@ -468,7 +427,7 @@ Foo: bar
     fn failing_handler_is_500() {
         struct Foo;
         impl Handler for Foo {
-            fn call(&self, _req: &mut dyn Request) -> Result<Response, Box<dyn Error + Send>> {
+            fn call(&self, _req: &mut dyn RequestExt) -> HandlerResult {
                 panic!()
             }
         }

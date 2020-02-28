@@ -7,6 +7,8 @@ use std::panic;
 use std::ptr::{null, null_mut};
 use std::str;
 
+use conduit::header::HeaderName;
+
 use Config;
 
 extern "C" {
@@ -264,8 +266,8 @@ pub fn write(conn: &Connection, bytes: &[u8]) -> i32 {
     unsafe { mg_write(conn.unwrap(), c_bytes, bytes.len() as size_t) }
 }
 
-pub fn get_header<'a>(conn: &'a Connection, string: &str) -> Option<&'a str> {
-    let string = CString::new(string).unwrap();
+pub fn get_header<'a>(conn: &'a Connection, string: HeaderName) -> Option<&'a str> {
+    let string = CString::new(string.as_str()).unwrap();
 
     unsafe { to_slice(conn, |conn| mg_get_header(conn.unwrap(), string.as_ptr())) }
 }
