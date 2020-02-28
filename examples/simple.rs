@@ -27,7 +27,7 @@ fn handler(req: &mut dyn RequestExt) -> io::Result<Response<Body>> {
     let mut res = Cursor::new(Vec::with_capacity(10000));
 
     http_write!(res, "<style>body {{ font-family: sans-serif; }}</style>");
-    http_write!(res, "<p>HTTP {:?}</p>", req.http_version());
+    http_write!(res, "<p>{:?}</p>", req.http_version());
     http_write!(res, "<p>Method: {:?}</p>", req.method());
     http_write!(res, "<p>Scheme: {:?}</p>", req.scheme());
     http_write!(res, "<p>Host: {:?}</p>", req.host());
@@ -55,7 +55,7 @@ fn handler(req: &mut dyn RequestExt) -> io::Result<Response<Body>> {
 
     let body: Body = vec_to_body(res.into_inner());
     Ok(Response::builder()
-        .header(header::CONTENT_TYPE, "text/plain")
+        .header(header::CONTENT_TYPE, "text/html")
         .body(body)
         .unwrap())
 }

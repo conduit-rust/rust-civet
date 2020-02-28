@@ -101,23 +101,22 @@ impl<'a> Connection<'a> {
     fn new(conn: &raw::Connection) -> Result<Connection<'_>, String> {
         match request_info(conn) {
             Ok(info) => {
+                let method = Method::from_bytes(info.method().unwrap_or_default())
+                    .map_err(|e| e.to_string())?;
+
+                let version = match info.http_version().unwrap() {
+                    b"1.0" => Version::HTTP_10,
+                    b"1.1" => Version::HTTP_11,
+                    _ => Version::default(),
+                };
+
                 let mut headers = HeaderMap::new();
                 for (name, value) in HeaderIterator::new(conn) {
                     headers.insert(
-                        header::HeaderName::from_bytes(name.as_bytes())
-                            .map_err(|e| e.to_string())?,
-                        header::HeaderValue::from_bytes(value.as_bytes())
-                            .map_err(|e| e.to_string())?,
+                        header::HeaderName::from_bytes(name).map_err(|e| e.to_string())?,
+                        header::HeaderValue::from_bytes(value).map_err(|e| e.to_string())?,
                     );
                 }
-                let method = Method::from_bytes(info.method().unwrap().as_bytes())
-                    .expect("Bad request method"); // FIXME: unwrap and expect panic
-
-                let version = match info.http_version().unwrap() {
-                    "1.0" => Version::HTTP_10,
-                    "1.1" => Version::HTTP_11,
-                    _ => Version::default(),
-                };
 
                 let request = CivetRequest {
                     conn,
@@ -192,7 +191,7 @@ impl<'a> HeaderIterator<'a> {
 }
 
 impl<'a> Iterator for HeaderIterator<'a> {
-    type Item = (&'a str, &'a str);
+    type Item = (&'a [u8], &'a [u8]);
     fn next(&mut self) -> Option<Self::Item> {
         let pos = self.position;
         let headers = &self.headers;
