@@ -7,6 +7,8 @@ use std::panic;
 use std::ptr::{null, null_mut};
 use std::str;
 
+use conduit::header::HeaderName;
+
 use Config;
 
 extern "C" {
@@ -127,12 +129,12 @@ impl<'a> Header<'a> {
         unsafe { &*self.ptr }
     }
 
-    pub fn name(&self) -> Option<&'a str> {
-        to_slice(self.as_ref(), |header| header.name)
+    pub fn name(&self) -> Option<&'a [u8]> {
+        to_byte_slice(self.as_ref(), |header| header.name)
     }
 
-    pub fn value(&self) -> Option<&'a str> {
-        to_slice(self.as_ref(), |header| header.value)
+    pub fn value(&self) -> Option<&'a [u8]> {
+        to_byte_slice(self.as_ref(), |header| header.value)
     }
 }
 
@@ -168,20 +170,20 @@ impl<'a> RequestInfo<'a> {
         self.ptr
     }
 
-    pub fn method(&self) -> Option<&str> {
-        to_slice(self.as_ref(), |info| info.request_method)
+    pub fn method(&self) -> Option<&[u8]> {
+        to_byte_slice(self.as_ref(), |info| info.request_method)
     }
 
     pub fn url(&self) -> Option<&str> {
-        to_slice(self.as_ref(), |info| info.uri)
+        to_str_slice(self.as_ref(), |info| info.uri)
     }
 
-    pub fn http_version(&self) -> Option<&str> {
-        to_slice(self.as_ref(), |info| info.http_version)
+    pub fn http_version(&self) -> Option<&[u8]> {
+        to_byte_slice(self.as_ref(), |info| info.http_version)
     }
 
     pub fn query_string(&self) -> Option<&str> {
-        to_slice(self.as_ref(), |info| info.query_string)
+        to_str_slice(self.as_ref(), |info| info.query_string)
     }
 
     pub fn remote_ip(&self) -> i32 {
@@ -232,9 +234,9 @@ impl MgCallbacks {
     }
 }
 
-fn to_slice<'a, T, F>(obj: &'a T, mut callback: F) -> Option<&'a str>
+fn to_byte_slice<T, F>(obj: &T, mut callback: F) -> Option<&[u8]>
 where
-    F: FnMut(&'a T) -> *const c_char,
+    F: FnMut(&T) -> *const c_char,
 {
     let chars = callback(obj);
 
@@ -242,7 +244,14 @@ where
         return None;
     }
 
-    Some(str::from_utf8(unsafe { CStr::from_ptr(chars).to_bytes() }).unwrap())
+    Some(unsafe { CStr::from_ptr(chars).to_bytes() })
+}
+
+fn to_str_slice<T, F>(obj: &T, callback: F) -> Option<&str>
+where
+    F: FnMut(&T) -> *const c_char,
+{
+    to_byte_slice(obj, callback).map(|bytes| str::from_utf8(bytes).unwrap())
 }
 
 pub fn start(options: *const *mut c_char) -> *mut MgContext {
@@ -264,10 +273,10 @@ pub fn write(conn: &Connection, bytes: &[u8]) -> i32 {
     unsafe { mg_write(conn.unwrap(), c_bytes, bytes.len() as size_t) }
 }
 
-pub fn get_header<'a>(conn: &'a Connection, string: &str) -> Option<&'a str> {
-    let string = CString::new(string).unwrap();
+pub fn get_header<'a>(conn: &'a Connection, string: HeaderName) -> Option<&'a str> {
+    let string = CString::new(string.as_str()).unwrap();
 
-    unsafe { to_slice(conn, |conn| mg_get_header(conn.unwrap(), string.as_ptr())) }
+    unsafe { to_str_slice(conn, |conn| mg_get_header(conn.unwrap(), string.as_ptr())) }
 }
 
 pub fn get_request_info(conn: &Connection) -> Option<RequestInfo<'_>> {
