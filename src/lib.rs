@@ -8,7 +8,9 @@ use std::io::prelude::*;
 use std::io::{self, BufWriter};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use conduit::{header, Extensions, Handler, HeaderMap, Host, Method, Scheme, TypeMap, Version};
+use conduit::{
+    header, Body, Extensions, Handler, HeaderMap, Host, Method, Scheme, TypeMap, Version,
+};
 
 use raw::{get_header, get_headers, get_request_info};
 use raw::{Header, RequestInfo};
@@ -225,7 +227,7 @@ impl Server {
                 );
             }
 
-            let (head, mut body) = match response {
+            let (head, body) = match response {
                 Ok(r) => r,
                 Err(_) => {
                     err(&mut writer);
@@ -249,7 +251,12 @@ impl Server {
             }
 
             write!(&mut writer, "\r\n").map_err(|_| ())?;
-            body.write_body(&mut writer).map_err(|_| ())?;
+            match body {
+                Body::Static(slice) => writer.write(slice).map(|_| ()),
+                Body::Owned(vec) => writer.write(vec.as_ref()).map(|_| ()),
+                Body::File(mut file) => io::copy(&mut file, &mut writer).map(|_| ()),
+            }
+            .map_err(|_| ())?;
 
             Ok(())
         }
@@ -271,7 +278,6 @@ fn request_info(connection: &raw::Connection) -> Result<RequestInfo<'_>, String>
 mod test {
     use super::{Config, Server};
     use conduit::{box_error, Body, Handler, HandlerResult, HttpResult, RequestExt, Response};
-    use std::io;
     use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::{channel, Sender};
@@ -346,8 +352,7 @@ mod test {
             fn call(&self, _req: &mut dyn RequestExt) -> HandlerResult {
                 let Foo(ref tx) = *self;
                 tx.lock().unwrap().send(()).unwrap();
-                let body: Body = Box::new(io::empty());
-                Response::builder().body(body).map_err(box_error)
+                Response::builder().body(Body::empty()).map_err(box_error)
             }
         }
 
@@ -376,9 +381,7 @@ GET / HTTP/1.1
                 let mut header_val = Vec::new();
                 header_val.extend_from_slice(req.headers().get("Foo").unwrap().as_bytes());
                 tx.lock().unwrap().send(header_val).unwrap();
-                Response::builder()
-                    .body(Box::new(io::empty()) as Body)
-                    .map_err(box_error)
+                Response::builder().body(Body::empty()).map_err(box_error)
             }
         }
 

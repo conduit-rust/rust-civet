@@ -5,8 +5,7 @@ extern crate route_recognizer;
 use std::sync::mpsc::channel;
 
 use civet::{Config, Server};
-use conduit::{box_error, HandlerResult, HttpResult, RequestExt, Response};
-use conduit::{static_to_body, vec_to_body};
+use conduit::{box_error, Body, HandlerResult, HttpResult, RequestExt, Response};
 use route_recognizer::{Params, Router};
 
 struct MyServer {
@@ -36,10 +35,10 @@ fn main() {
 
 fn root(_req: &mut dyn RequestExt, _params: &Params) -> HttpResult {
     let bytes = b"you found the root!\n";
-    Response::builder().body(static_to_body(bytes))
+    Response::builder().body(Body::from_static(bytes))
 }
 
 fn id(_req: &mut dyn RequestExt, params: &Params) -> HttpResult {
     let string = format!("you found the id {}!\n", params["id"]);
-    Response::builder().body(vec_to_body(string.into_bytes()))
+    Response::builder().body(Body::from_vec(string.into_bytes()))
 }

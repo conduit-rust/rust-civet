@@ -6,7 +6,7 @@ use std::io::{self, Cursor};
 use std::sync::mpsc::channel;
 
 use civet::{Config, Server};
-use conduit::{header, vec_to_body, Body, RequestExt, Response};
+use conduit::{header, Body, RequestExt, Response};
 
 macro_rules! http_write {
     ($dst:expr, $fmt:expr) => (
@@ -53,7 +53,7 @@ fn handler(req: &mut dyn RequestExt) -> io::Result<Response<Body>> {
 
     http_write!(res, "</ul>");
 
-    let body: Body = vec_to_body(res.into_inner());
+    let body: Body = Body::from_vec(res.into_inner());
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, "text/html")
         .body(body)
