@@ -48,7 +48,7 @@ pub fn config_to_options(config: &Config) -> (Vec<CString>, Vec<*const c_char>) 
         enable_keep_alive.map(|b| (if b { "yes" } else { "no" }).to_string()),
     );
     let mut ptrs: Vec<*const c_char> = options.iter().map(|a| a.as_ptr()).collect();
-    ptrs.push(0 as *const c_char);
+    ptrs.push(std::ptr::null::<c_char>());
     return (options, ptrs);
 
     fn opt(v: &mut Vec<CString>, name: &str, opt: Option<String>) {

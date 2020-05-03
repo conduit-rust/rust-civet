@@ -73,7 +73,7 @@ impl<'a> conduit::RequestExt for CivetRequest<'a> {
             (ip >> 24) as u8,
             (ip >> 16) as u8,
             (ip >> 8) as u8,
-            (ip >> 0) as u8,
+            ip as u8,
         );
         SocketAddr::V4(SocketAddrV4::new(ip, self.request_info.remote_port()))
     }
@@ -212,6 +212,7 @@ pub struct Server(raw::Server<Box<dyn Handler + 'static + Sync>>);
 
 impl Server {
     pub fn start<H: Handler + 'static + Sync>(options: Config, handler: H) -> io::Result<Server> {
+        #[allow(clippy::borrowed_box)] 
         fn internal_handler(
             conn: &mut raw::Connection,
             handler: &Box<dyn Handler + 'static + Sync>,
@@ -305,7 +306,7 @@ mod test {
     fn cfg(port: u16) -> Config {
         let mut cfg = Config::new();
         cfg.port(port).threads(1);
-        return cfg;
+        cfg
     }
 
     #[test]

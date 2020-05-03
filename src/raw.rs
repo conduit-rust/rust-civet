@@ -2,7 +2,6 @@ use libc::{c_char, c_int, c_long, c_void, size_t};
 use std::ffi::{CStr, CString};
 use std::io;
 use std::marker;
-use std::mem::transmute;
 use std::panic;
 use std::ptr::{null, null_mut};
 use std::str;
@@ -87,7 +86,7 @@ extern "C" fn raw_handler<T: 'static>(conn: *mut MgConnection, param: *mut c_voi
     let env = Env(conn, param);
     let ret = panic::catch_unwind(move || {
         let Env(conn, param) = env;
-        let callback: &ServerCallback<T> = unsafe { transmute(param) };
+        let callback: &ServerCallback<T> = unsafe { &*(param as *const ServerCallback<T>) };
 
         let mut connection = Connection(conn);
         (callback.callback)(&mut connection, &callback.param)
@@ -273,7 +272,7 @@ pub fn write(conn: &Connection, bytes: &[u8]) -> i32 {
     unsafe { mg_write(conn.unwrap(), c_bytes, bytes.len() as size_t) }
 }
 
-pub fn get_header<'a>(conn: &'a Connection, string: HeaderName) -> Option<&'a str> {
+pub fn get_header(conn: &Connection, string: HeaderName) -> Option<&str> {
     let string = CString::new(string.as_str()).unwrap();
 
     unsafe { to_str_slice(conn, |conn| mg_get_header(conn.unwrap(), string.as_ptr())) }
