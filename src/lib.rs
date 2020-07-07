@@ -32,6 +32,7 @@ pub struct CivetRequest<'a> {
     extensions: Extensions,
     version: Version,
     method: Method,
+    path_rewrite: Option<String>,
 }
 
 impl<'a> conduit::RequestExt for CivetRequest<'a> {
@@ -60,7 +61,18 @@ impl<'a> conduit::RequestExt for CivetRequest<'a> {
     }
 
     fn path(&self) -> &str {
-        self.request_info.url().unwrap()
+        if let Some(rewrite) = &self.path_rewrite {
+            rewrite
+        } else {
+            self.request_info.url().unwrap()
+        }
+    }
+
+    fn path_mut(&mut self) -> &mut String {
+        if self.path_rewrite.is_none() {
+            self.path_rewrite = Some(String::from(self.path()))
+        }
+        self.path_rewrite.as_mut().unwrap() // Unwrap is safe because Option is definitely Some
     }
 
     fn query_string(&self) -> Option<&str> {
@@ -127,6 +139,7 @@ impl<'a> Connection<'a> {
                     extensions: TypeMap::new(),
                     method,
                     version,
+                    path_rewrite: None,
                 };
 
                 Ok(Connection {
