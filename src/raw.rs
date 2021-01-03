@@ -292,7 +292,7 @@ pub fn get_request_info(conn: &Connection) -> Option<RequestInfo<'_>> {
     }
 }
 
-pub fn get_headers<'a>(conn: &'a Connection) -> Vec<Header<'a>> {
+pub fn get_headers(conn: &Connection) -> Vec<Header<'_>> {
     match get_request_info(conn) {
         Some(info) => unsafe {
             (*info.as_ptr())
