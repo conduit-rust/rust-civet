@@ -9,7 +9,7 @@ use std::io::{self, BufWriter};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use conduit::{
-    header, Body, Extensions, Handler, HeaderMap, Host, Method, Scheme, TypeMap, Version,
+    header, Body, Extensions, Handler, HeaderMap, Host, Method, Scheme, StartInstant, Version,
 };
 
 use raw::{get_header, get_headers, get_request_info};
@@ -132,11 +132,13 @@ impl<'a> Connection<'a> {
                     );
                 }
 
+                let mut extensions = Extensions::new();
+                extensions.insert(StartInstant::now());
                 let request = CivetRequest {
                     conn,
                     request_info: info,
                     headers,
-                    extensions: TypeMap::new(),
+                    extensions,
                     method,
                     version,
                     path_rewrite: None,
@@ -225,7 +227,7 @@ pub struct Server(raw::Server<Box<dyn Handler + 'static + Sync>>);
 
 impl Server {
     pub fn start<H: Handler + 'static + Sync>(options: Config, handler: H) -> io::Result<Server> {
-        #[allow(clippy::borrowed_box)] 
+        #[allow(clippy::borrowed_box)]
         fn internal_handler(
             conn: &mut raw::Connection,
             handler: &Box<dyn Handler + 'static + Sync>,
