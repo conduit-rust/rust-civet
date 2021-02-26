@@ -18,7 +18,8 @@ impl conduit::Handler for MyServer {
             Ok(m) => m,
             Err(e) => panic!("{}", e),
         };
-        (*hit.handler)(req, &hit.params).map_err(box_error)
+        let handler = hit.handler();
+        handler(req, hit.params()).map_err(box_error)
     }
 }
 
