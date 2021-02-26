@@ -10,7 +10,7 @@ repository = "https://github.com/jtgeibel/rust-civet"
 travis-ci = { repository = "https://github.com/jtgeibel/rust-civet" }
 
 [dependencies]
-conduit = "0.9.0-alpha.4"
+conduit = "0.9.0-alpha.5"
 libc = "0.2"
 
 [dependencies.civet-sys]
